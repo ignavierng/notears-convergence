@@ -163,18 +163,52 @@ def squared_loss(output, target):
     return loss
 
 
-def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
-    """Perform one step of dual ascent in augmented Lagrangian."""
-    h_new = None
-    optimizer = LBFGSBScipy(model.parameters())
-    X_torch = torch.from_numpy(X)
-    while rho < rho_max:
+def alm(model, X, lambda1, lambda2, max_iter, rho_max, h_tol):
+    """Constrained optimization with augmented Lagrangian method (ALM)."""
+    rho, alpha, h = 1.0, 0.0, np.inf
+    for _ in range(max_iter):
+        h_new = None
+        optimizer = LBFGSBScipy(model.parameters())
+        X_torch = torch.from_numpy(X)
+        while rho < rho_max:
+            def closure():
+                optimizer.zero_grad()
+                X_hat = model(X_torch)
+                loss = squared_loss(X_hat, X_torch)
+                h_val = model.h_func()
+                penalty = 0.5 * rho * h_val * h_val + alpha * h_val
+                l2_reg = 0.5 * lambda2 * model.l2_reg()
+                l1_reg = lambda1 * model.fc1_l1_reg()
+                primal_obj = loss + penalty + l2_reg + l1_reg
+                primal_obj.backward()
+                return primal_obj
+            optimizer.step(closure)  # NOTE: updates model in-place
+            with torch.no_grad():
+                h_new = model.h_func().item()
+            if h_new > 0.25 * h:
+                rho *= 10
+            else:
+                break
+        alpha += rho * h_new
+        h = h_new
+        if h <= h_tol or rho >= rho_max:
+            break
+    return model
+
+
+def qpm(model, X, lambda1, lambda2, max_iter, rho_max, h_tol):
+    """Constrained optimization with quadratic penalty method (QPM)."""
+    rho, h = 1.0, np.inf
+    for _ in range(max_iter):
+        h_new = None
+        optimizer = LBFGSBScipy(model.parameters())
+        X_torch = torch.from_numpy(X)
         def closure():
             optimizer.zero_grad()
             X_hat = model(X_torch)
             loss = squared_loss(X_hat, X_torch)
             h_val = model.h_func()
-            penalty = 0.5 * rho * h_val * h_val + alpha * h_val
+            penalty = 0.5 * rho * h_val * h_val
             l2_reg = 0.5 * lambda2 * model.l2_reg()
             l1_reg = lambda1 * model.fc1_l1_reg()
             primal_obj = loss + penalty + l2_reg + l1_reg
@@ -183,28 +217,28 @@ def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
         optimizer.step(closure)  # NOTE: updates model in-place
         with torch.no_grad():
             h_new = model.h_func().item()
-        if h_new > 0.25 * h:
-            rho *= 10
-        else:
+        rho *= 10
+        h = h_new
+        if h <= h_tol or rho >= rho_max:
             break
-    alpha += rho * h_new
-    return rho, alpha, h_new
+    return model
 
 
 def notears_nonlinear(model: nn.Module,
                       X: np.ndarray,
                       lambda1: float = 0.,
                       lambda2: float = 0.,
+                      opt_type='qpm',
                       max_iter: int = 100,
                       h_tol: float = 1e-8,
                       rho_max: float = 1e+16,
                       w_threshold: float = 0.3):
-    rho, alpha, h = 1.0, 0.0, np.inf
-    for _ in range(max_iter):
-        rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
-                                         rho, alpha, h, rho_max)
-        if h <= h_tol or rho >= rho_max:
-            break
+    if opt_type == 'alm':
+        model = alm(model, X, lambda1, lambda2, max_iter, rho_max, h_tol)
+    elif opt_type == 'qpm':
+        model = qpm(model, X, lambda1, lambda2, max_iter, rho_max, h_tol)
+    else:
+        raise ValueError('unknown optimization type')
     W_est = model.fc1_to_adj()
     W_est[np.abs(W_est) < w_threshold] = 0
     return W_est
@@ -225,7 +259,7 @@ def main():
     np.savetxt('X.csv', X, delimiter=',')
 
     model = NotearsMLP(dims=[d, 10, 1], bias=True)
-    W_est = notears_nonlinear(model, X, lambda1=0.01, lambda2=0.01)
+    W_est = notears_nonlinear(model, X, lambda1=0.01, lambda2=0.01, opt_type='qpm')
     assert ut.is_dag(W_est)
     np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
