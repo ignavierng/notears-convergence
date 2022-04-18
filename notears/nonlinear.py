@@ -1,3 +1,7 @@
+"""
+Code modified from:
+https://github.com/xunzheng/notears/blob/master/notears/nonlinear.py
+"""
 from notears.locally_connected import LocallyConnected
 from notears.lbfgsb_scipy import LBFGSBScipy
 from notears.trace_expm import trace_expm

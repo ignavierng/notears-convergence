@@ -1,3 +1,7 @@
+"""
+Code modified from:
+https://github.com/xunzheng/notears/blob/master/notears/linear.py
+"""
 import numpy as np
 import scipy.linalg as slin
 import scipy.optimize as sopt
