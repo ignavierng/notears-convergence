@@ -23,7 +23,7 @@ If you find it useful, please consider citing:
 ## Running NOTEARS(-MLP) with QPM and ALM
 - To use quadratic penalty method, set `opt_type` to `qpm`.
 - To use augmented Lagrangian method, set `opt_type` to `alm`.
-- See [demo_linear.ipynb](https://github.com/ignavierng/notears-convergence/blob/master/demo_linear.ipynb) and [demo_nonlinear.ipynb](https://github.com/ignavierng/notears-convergence/blob/master/demo_nonlinear.ipynb) for a demo in the linear and nonlinear cases, respectively.
+- See [examples/demo_linear.ipynb](https://github.com/ignavierng/notears-convergence/blob/master/examples/demo_linear.ipynb) and [examples/demo_nonlinear.ipynb](https://github.com/ignavierng/notears-convergence/blob/master/examples/demo_nonlinear.ipynb) for a demo in the linear and nonlinear cases, respectively.
 
 
 ## Acknowledgments
